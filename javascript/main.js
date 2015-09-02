@@ -3,16 +3,21 @@ var box2d = require('./Box2dWeb-2.1.a.3');
 var vectors = require('gamejs/utils/vectors');
 var math = require('gamejs/utils/math');
 
-var PLAYER_SIZE=1.5;
+var PLAYER_SIZE=1.3;
 var BALL_SIZE=1;
 
 var WIDTH_PX=900;   //screen width in pixels
 var HEIGHT_PX=500; //screen height in pixels
 var SCALE=15;      //how many pixels in a meter
+var FORCE=25;      //how many force apply to move
 var WIDTH_M=WIDTH_PX/SCALE; //world width in meters. for this example, world is as large as the screen
 var HEIGHT_M=HEIGHT_PX/SCALE; //world height in meters
 var KEYS_DOWN={}; //keep track of what keys are held down by the player
 var b2world;
+var CATEGORY_STAGE_WALL = 1;
+var CATEGORY_STADUIM_WALL = 2;
+var CATEGORY_PLAYER = 4;
+var CATEGORY_BALL = 8;
 
 //initialize font to draw text with
 var font=new gamejs.font.Font('16px Sans-serif');
@@ -39,7 +44,15 @@ var BoxProp = function(pars){
     var fixdef=new box2d.b2FixtureDef;
     fixdef.shape=new box2d.b2PolygonShape();
     fixdef.shape.SetAsBox(this.size[0]/2, this.size[1]/2);
-    fixdef.restitution=0.4; //positively bouncy!
+    fixdef.restitution=0.5;
+	
+	if(pars.external){
+		fixdef.filter.categoryBits = CATEGORY_STAGE_WALL;
+		fixdef.filter.maskBits = CATEGORY_PLAYER;
+	} else {
+		fixdef.filter.categoryBits = CATEGORY_STADUIM_WALL;
+		fixdef.filter.maskBits = CATEGORY_BALL;
+	}
     this.body.CreateFixture(fixdef);
     return this;  
 };
@@ -53,14 +66,20 @@ var CirclePlayer = function(pars){
     bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
     bdef.angle=0;
 	bdef.type = box2d.b2Body.b2_dynamicBody;
+	bdef.linearDamping = 1;
+    bdef.bullet=true;
     bdef.fixedRotation=true;
 	
     this.body=b2world.CreateBody(bdef);
     
     //initialize shape
     var fixdef=new box2d.b2FixtureDef;
-    fixdef.shape=new box2d.b2CircleShape(PLAYER_SIZE); //size
-    fixdef.restitution=0.4; //positively bouncy!
+    fixdef.shape=new box2d.b2CircleShape(PLAYER_SIZE);
+    fixdef.restitution=0;
+	fixdef.density=0.2;
+	fixdef.friction=0.6;
+	fixdef.filter.categoryBits = CATEGORY_PLAYER;
+	fixdef.filter.maskBits = CATEGORY_BALL | CATEGORY_PLAYER | CATEGORY_STAGE_WALL;
     this.body.CreateFixture(fixdef);
     return this;  
 };
@@ -75,14 +94,20 @@ var CircleBall = function(pars){
     bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
     bdef.angle=0;
 	bdef.type = box2d.b2Body.b2_dynamicBody;
+	bdef.linearDamping=0.4;
+    bdef.bullet=true;
     bdef.fixedRotation=true;
 	
     this.body=b2world.CreateBody(bdef);
     
     //initialize shape
     var fixdef=new box2d.b2FixtureDef;
-    fixdef.shape=new box2d.b2CircleShape(BALL_SIZE); //size
-    fixdef.restitution=0.4; //positively bouncy!
+    fixdef.shape=new box2d.b2CircleShape(BALL_SIZE);
+    fixdef.restitution=0.5;
+	fixdef.density=1;
+	fixdef.friction=1;
+	fixdef.filter.categoryBits = CATEGORY_BALL;
+	fixdef.filter.maskBits = CATEGORY_STADUIM_WALL | CATEGORY_PLAYER;
     this.body.CreateFixture(fixdef);
     return this;  
 };
@@ -112,10 +137,15 @@ function main(){
     
     //outer walls
 	
-    props.push(new BoxProp({'size':[WIDTH_M, 0.1],    'position':[WIDTH_M/2, 0.1]}));
-    props.push(new BoxProp({'size':[0.1, HEIGHT_M-2], 'position':[0.1, HEIGHT_M/2]}));
-    props.push(new BoxProp({'size':[WIDTH_M, 0.1],    'position':[WIDTH_M/2, HEIGHT_M-0.1]}));
-    props.push(new BoxProp({'size':[0.1, HEIGHT_M-2], 'position':[WIDTH_M-0.1, HEIGHT_M/2]}));
+    props.push(new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, 0.1], 			'external': true}));
+    props.push(new BoxProp({'size':[0.1, HEIGHT_M],	'position':[0.1, HEIGHT_M/2], 			'external': true}));
+    props.push(new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, HEIGHT_M-0.1], 	'external': true}));
+    props.push(new BoxProp({'size':[0.1, HEIGHT_M], 'position':[WIDTH_M-0.1, HEIGHT_M/2], 	'external': true}));
+	
+	props.push(new BoxProp({'size':[WIDTH_M - PLAYER_SIZE * 4, 0.1],	'position':[WIDTH_M/2, PLAYER_SIZE * 2], 			'external': false}));
+    props.push(new BoxProp({'size':[0.1, HEIGHT_M - PLAYER_SIZE * 4],	'position':[PLAYER_SIZE * 2, HEIGHT_M/2], 			'external': false}));
+    props.push(new BoxProp({'size':[WIDTH_M - PLAYER_SIZE * 4, 0.1],    'position':[WIDTH_M/2, HEIGHT_M - PLAYER_SIZE * 2],	'external': false}));
+    props.push(new BoxProp({'size':[0.1, HEIGHT_M - PLAYER_SIZE * 4], 	'position':[WIDTH_M - PLAYER_SIZE * 2, HEIGHT_M/2], 'external': false}));
     
     //pen in the center
     var center=[WIDTH_M/2, HEIGHT_M/2];
@@ -142,18 +172,18 @@ function main(){
         //set car controls according to player input
         if(KEYS_DOWN[BINDINGS.up]){
 			var position=player1.body.GetWorldCenter();
-            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(0, -20)), position );
+            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(0, -FORCE)), position );
         } else if(KEYS_DOWN[BINDINGS.down]){
 			var position=player1.body.GetWorldCenter();
-            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(0, 20)), position );
+            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(0, FORCE)), position );
 		}
 		
 		if(KEYS_DOWN[BINDINGS.left]){
 			var position=player1.body.GetWorldCenter();
-            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(-20, 0)), position );
+            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(-FORCE, 0)), position );
         } else if(KEYS_DOWN[BINDINGS.right]){
 			var position=player1.body.GetWorldCenter();
-            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(20, 0)), position );
+            player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(FORCE, 0)), position );
 		}
 		
         //update physics world
@@ -165,13 +195,14 @@ function main(){
         //fill background
         display.clear();
 		display.blit(stage, [0, 0]);
-        //b2world.DrawDebugData();
+        b2world.DrawDebugData();
+		/*
 		display.blit(unit, [((circleBall.body.GetPosition().x - circleBall.size) * SCALE), (circleBall.body.GetPosition().y - circleBall.size) * SCALE]);
 		
 		for(var i = 0; i < players.length; i++){
 			display.blit(player, [((players[i].body.GetPosition().x - players[i].size) * SCALE), (players[i].body.GetPosition().y - players[i].size) * SCALE]);
 		}
-        
+        */
 		
 		return;
     };
