@@ -1,6 +1,6 @@
 //Imports
 var gamejs = require('gamejs');
-var box2d = require('./Box2dWeb-2.1.a.3');
+var box2d = require('./Box2dWeb-2.1.a.3_jf');
 var vectors = require('gamejs/utils/vectors');
 var math = require('gamejs/utils/math');
 
@@ -9,11 +9,11 @@ var PLAYER_SIZE=1.2;
 var BALL_SIZE=0.8;
 
 //Vars Values
-var WIDTH_PX=900;
+var WIDTH_PX=1100;
 var HEIGHT_PX=500;
 var SCALE=15;
-var FORCE=20;
-var FORCE_HIT=20;
+var FORCE=19;
+var FORCE_HIT=30;
 var WIDTH_M=WIDTH_PX/SCALE;
 var HEIGHT_M=HEIGHT_PX/SCALE;
 var KEYS_DOWN={};
@@ -24,6 +24,10 @@ var CATEGORY_STAGE_WALL = 1;
 var CATEGORY_STADUIM_WALL = 2;
 var CATEGORY_PLAYER = 4;
 var CATEGORY_BALL = 8;
+var CATEGORY_GOAL_CIRCLE = 16;
+
+var leftGoals = 0;
+var rightGoals = 0;
 
 //Vars Fonts
 var font=new gamejs.font.Font('16px Sans-serif');
@@ -36,8 +40,44 @@ var BINDINGS={up:gamejs.event.K_UP,
 			  hold:gamejs.event.K_z,
 			  x:gamejs.event.K_x}; 
 
-//var myListener = new box2d.b2ContactListener();
-			  
+var collisionListener = new box2d.b2ContactListener();
+
+collisionListener.BeginContact = function (contact) {
+   if (contact.GetFixtureA().GetBody().GetUserData() == 'player' && contact.GetFixtureB().GetBody().GetUserData() == 'ball') {
+	   contact.GetFixtureA().GetBody().contactWithBall = true;
+   } else if (contact.GetFixtureA().GetBody().GetUserData() == 'ball' && contact.GetFixtureB().GetBody().GetUserData() == 'player') {
+	   contact.GetFixtureB().GetBody().contactWithBall = true;
+   }
+};
+
+collisionListener.EndContact = function (contact) {
+   if (contact.GetFixtureA().GetBody().GetUserData() == 'player') {
+	   contact.GetFixtureA().GetBody().contactWithBall = false;
+   } else if (contact.GetFixtureB().GetBody().GetUserData() == 'player') {
+	   contact.GetFixtureB().GetBody().contactWithBall = false;
+   }
+};
+
+var CircleGoal = function(pars){
+
+    var bdef=new box2d.b2BodyDef();
+    bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
+	
+    this.body=b2world.CreateBody(bdef);
+
+    var fixdef=new box2d.b2FixtureDef;
+    fixdef.shape=new box2d.b2CircleShape(BALL_SIZE / 2);
+    fixdef.restitution=0.6;
+	fixdef.density=100;
+	fixdef.friction=0;
+	fixdef.filter.categoryBits = CATEGORY_GOAL_CIRCLE;
+	fixdef.filter.maskBits = CATEGORY_BALL | CATEGORY_PLAYER;
+    
+	this.body.CreateFixture(fixdef);
+	
+    return this;  
+};
+
 var BoxProp = function(pars){
 
     this.size=pars.size;
@@ -46,19 +86,26 @@ var BoxProp = function(pars){
     bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
     bdef.angle=0;
     bdef.fixedRotation=true;
+	
     this.body=b2world.CreateBody(bdef);
     
     var fixdef=new box2d.b2FixtureDef;
     fixdef.shape=new box2d.b2PolygonShape();
     fixdef.shape.SetAsBox(this.size[0]/2, this.size[1]/2);
-	fixdef.restitution=0;
-	fixdef.density=1;
+	fixdef.density=10;
 	fixdef.friction=0;
 	
-	if(pars.external){
+	if(pars.type == 'external'){
+		fixdef.restitution=0.1;
 		fixdef.filter.categoryBits = CATEGORY_STAGE_WALL;
 		fixdef.filter.maskBits = CATEGORY_PLAYER;
 	} else {
+		if(pars.type == 'goal'){
+			fixdef.restitution=0;
+		} else {
+			fixdef.restitution=0.7;
+		}
+		
 		fixdef.filter.categoryBits = CATEGORY_STADUIM_WALL;
 		fixdef.filter.maskBits = CATEGORY_BALL;
 	}
@@ -82,14 +129,15 @@ var CirclePlayer = function(pars){
 	
     this.body = b2world.CreateBody(bdef);
 	this.body.SetUserData('player');
+	this.body.contactWithBall = false;
     
     var fixdef=new box2d.b2FixtureDef;
     fixdef.shape=new box2d.b2CircleShape(PLAYER_SIZE);
     fixdef.restitution=0;
 	fixdef.density=0.2;
-	fixdef.friction=1;
+	fixdef.friction=0.5;
 	fixdef.filter.categoryBits = CATEGORY_PLAYER;
-	fixdef.filter.maskBits = CATEGORY_BALL | CATEGORY_PLAYER | CATEGORY_STAGE_WALL;
+	fixdef.filter.maskBits = CATEGORY_BALL | CATEGORY_PLAYER | CATEGORY_STAGE_WALL | CATEGORY_GOAL_CIRCLE;
     
 	this.body.CreateFixture(fixdef);
     
@@ -104,7 +152,7 @@ var CircleBall = function(pars){
     var bdef=new box2d.b2BodyDef();
 	bdef.type = box2d.b2Body.b2_dynamicBody;
     bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
-	bdef.linearDamping=0.8;
+	bdef.linearDamping=0.81;
     bdef.angle=0;
     bdef.bullet=true;
     bdef.fixedRotation=true;
@@ -114,11 +162,11 @@ var CircleBall = function(pars){
 
     var fixdef=new box2d.b2FixtureDef;
     fixdef.shape=new box2d.b2CircleShape(BALL_SIZE);
-    fixdef.restitution=0.5;
+    fixdef.restitution=0.1;
 	fixdef.density=1;
-	fixdef.friction=0.2;
+	fixdef.friction=0.1;
 	fixdef.filter.categoryBits = CATEGORY_BALL;
-	fixdef.filter.maskBits = CATEGORY_STADUIM_WALL | CATEGORY_PLAYER;
+	fixdef.filter.maskBits = CATEGORY_STADUIM_WALL | CATEGORY_PLAYER | CATEGORY_GOAL_CIRCLE;
     
 	this.body.CreateFixture(fixdef);
 	
@@ -130,6 +178,8 @@ function main(){
     var display = gamejs.display.setMode([WIDTH_PX, HEIGHT_PX]);
 
     b2world=new box2d.b2World(new box2d.b2Vec2(0, 0), false);
+	
+	b2world.SetContactListener(collisionListener);
     
     var debugDraw = new box2d.b2DebugDraw();
     debugDraw.SetSprite(display._canvas.getContext("2d"));
@@ -139,17 +189,44 @@ function main(){
     debugDraw.SetFlags(box2d.b2DebugDraw.e_shapeBit);
     b2world.SetDebugDraw(debugDraw);
     
-    new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, 0.1], 			'external': true});
-    new BoxProp({'size':[0.1, HEIGHT_M],	'position':[0.1, HEIGHT_M/2], 			'external': true});
-    new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, HEIGHT_M-0.1], 	'external': true});
-    new BoxProp({'size':[0.1, HEIGHT_M], 'position':[WIDTH_M-0.1, HEIGHT_M/2], 	'external': true});
+	var center=[WIDTH_M/2, HEIGHT_M/2];
 	
-	new BoxProp({'size':[WIDTH_M - PLAYER_SIZE * 4, 0.1],	'position':[WIDTH_M/2, PLAYER_SIZE * 2], 			'external': false});
-    new BoxProp({'size':[0.1, HEIGHT_M - PLAYER_SIZE * 4],	'position':[PLAYER_SIZE * 2, HEIGHT_M/2], 			'external': false});
-    new BoxProp({'size':[WIDTH_M - PLAYER_SIZE * 4, 0.1],    'position':[WIDTH_M/2, HEIGHT_M - PLAYER_SIZE * 2],	'external': false});
-    new BoxProp({'size':[0.1, HEIGHT_M - PLAYER_SIZE * 4], 	'position':[WIDTH_M - PLAYER_SIZE * 2, HEIGHT_M/2], 'external': false});
+    new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, 0.1], 'type': 'external'});
+    new BoxProp({'size':[0.1, HEIGHT_M],	'position':[0.1, HEIGHT_M/2], 'type': 'external'});
+    new BoxProp({'size':[WIDTH_M, 0.1],	'position':[WIDTH_M/2, HEIGHT_M-0.1], 'type': 'external'});
+    new BoxProp({'size':[0.1, HEIGHT_M], 'position':[WIDTH_M-0.1, HEIGHT_M/2], 'type': 'external'});
+	
+	var leftMargin = PLAYER_SIZE * 4;
+	var rightMargin = WIDTH_M - (PLAYER_SIZE * 4);
+	
+	//TOP
+	new BoxProp({'size':[WIDTH_M - (PLAYER_SIZE * 8), 0.1], 'position':[WIDTH_M/2, PLAYER_SIZE * 2], 'type': 'stadium'});
+	//BOTTOM
+    new BoxProp({'size':[WIDTH_M - (PLAYER_SIZE * 8), 0.1], 'position':[WIDTH_M/2, HEIGHT_M - PLAYER_SIZE * 2], 'type': 'stadium'});
+	//LEFT TOP
+    new BoxProp({'size':[0.1, (HEIGHT_M - (PLAYER_SIZE * 4)) / 3], 'position':[leftMargin, (HEIGHT_M / 4) - (PLAYER_SIZE)], 'type': 'stadium'});
+	//LEFT BOTTOM
+    new BoxProp({'size':[0.1, (HEIGHT_M - (PLAYER_SIZE * 4)) / 3], 'position':[leftMargin, (HEIGHT_M) - (PLAYER_SIZE * 6)], 'type': 'stadium'});
+	//RIGHT TOP 
+    new BoxProp({'size':[0.1, (HEIGHT_M - (PLAYER_SIZE * 4)) / 3], 'position':[rightMargin, (HEIGHT_M / 4) - (PLAYER_SIZE)], 'type': 'stadium'});
+	//RIGHT TOP 
+    new BoxProp({'size':[0.1, (HEIGHT_M - (PLAYER_SIZE * 4)) / 3], 'position':[rightMargin, (HEIGHT_M) - (PLAYER_SIZE * 6)], 'type': 'stadium'});
     
-    var center=[WIDTH_M/2, HEIGHT_M/2];
+	//GOAL LEFT
+	new BoxProp({'size':[BALL_SIZE * 4, 0.1], 'position':[(PLAYER_SIZE * 4) - (BALL_SIZE * 2) , ((HEIGHT_M - (PLAYER_SIZE)) / 3) + PLAYER_SIZE], 'type': 'goal'});
+	new BoxProp({'size':[BALL_SIZE * 4, 0.1], 'position':[(PLAYER_SIZE * 4) - (BALL_SIZE * 2) , (HEIGHT_M / 2) + (PLAYER_SIZE * 4)], 'type': 'goal'});
+	new BoxProp({'size':[0.1, (PLAYER_SIZE * 8)], 'position':[(PLAYER_SIZE * 4) - (BALL_SIZE * 4), center[1]], 'type': 'goal'});
+	
+	//GOAL RIGHT
+	new BoxProp({'size':[BALL_SIZE * 4, 0.1], 'position':[(WIDTH_M - (PLAYER_SIZE * 4)) + (BALL_SIZE * 2) , ((HEIGHT_M - (PLAYER_SIZE)) / 3) + PLAYER_SIZE], 'type': 'goal'});
+	new BoxProp({'size':[BALL_SIZE * 4, 0.1], 'position':[(WIDTH_M - (PLAYER_SIZE * 4)) + (BALL_SIZE * 2) , (HEIGHT_M / 2) + (PLAYER_SIZE * 4)], 'type': 'goal'});
+	new BoxProp({'size':[0.1, (PLAYER_SIZE * 8)], 'position':[(WIDTH_M - (PLAYER_SIZE * 4)) + (BALL_SIZE * 4), center[1]], 'type': 'goal'});
+	
+	new CircleGoal({'position': [PLAYER_SIZE * 4, ((HEIGHT_M - (PLAYER_SIZE)) / 3) + PLAYER_SIZE]});
+	new CircleGoal({'position': [PLAYER_SIZE * 4, (HEIGHT_M / 2) + (PLAYER_SIZE * 4)]});
+	
+	new CircleGoal({'position': [WIDTH_M - (PLAYER_SIZE * 4), ((HEIGHT_M - (PLAYER_SIZE)) / 3) + PLAYER_SIZE]});
+	new CircleGoal({'position': [WIDTH_M - (PLAYER_SIZE * 4), (HEIGHT_M / 2) + (PLAYER_SIZE * 4)]});
 	
 	var players = [];
 	var player1 = new CirclePlayer({'size':[1, 6], 'position':[center[0], center[1] + 10]});
@@ -188,7 +265,7 @@ function main(){
             player1.body.ApplyForce(player1.body.GetWorldVector(new box2d.b2Vec2(curForce, 0)), position);
 		}
 		
-		if(KEYS_DOWN[BINDINGS.x]){
+		if(KEYS_DOWN[BINDINGS.x] && player1.body.contactWithBall == true){
 			diffX = ballPosition.x - position.x;
 			diffY = ballPosition.y - position.y;
 			
