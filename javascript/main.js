@@ -302,7 +302,7 @@ function main(){
 		
 		for(var i = 0; i < players.length; i++){
 			display.blit(player, [((players[i].body.GetPosition().x - players[i].size) * SCALE), (players[i].body.GetPosition().y - players[i].size) * SCALE]);
-			asdasdasdasd
+			Dejando la caga
 		}
 		*/
 		
