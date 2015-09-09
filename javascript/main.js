@@ -12,7 +12,7 @@ var BALL_SIZE=0.8;
 var WIDTH_PX=1100;
 var HEIGHT_PX=500;
 var SCALE=15;
-var FORCE=19;
+var FORCE=20;
 var FORCE_HIT=30;
 var WIDTH_M=WIDTH_PX/SCALE;
 var HEIGHT_M=HEIGHT_PX/SCALE;
@@ -123,7 +123,7 @@ var CirclePlayer = function(pars){
     bdef.type = box2d.b2Body.b2_dynamicBody;
 	bdef.position=new box2d.b2Vec2(pars.position[0], pars.position[1]);
     bdef.angle=0;
-	bdef.linearDamping = 1;
+	bdef.linearDamping = 2.5;
     bdef.bullet=true;
     bdef.fixedRotation=true;
 	
@@ -135,7 +135,7 @@ var CirclePlayer = function(pars){
     fixdef.shape=new box2d.b2CircleShape(PLAYER_SIZE);
     fixdef.restitution=0;
 	fixdef.density=0.2;
-	fixdef.friction=0.5;
+	fixdef.friction=0.4;
 	fixdef.filter.categoryBits = CATEGORY_PLAYER;
 	fixdef.filter.maskBits = CATEGORY_BALL | CATEGORY_PLAYER | CATEGORY_STAGE_WALL | CATEGORY_GOAL_CIRCLE;
     
@@ -233,9 +233,9 @@ function main(){
 	players.push(player1);
 	
 	var circleBall = new CircleBall({'size':[1, 6], 'position':[center[0], center[1]]});
-	var stage = gamejs.image.load('images/cancha5.jpg');
+	var stage = gamejs.image.load('images/cancha.png');
 	var unit = gamejs.image.load('images/ball.png');
-	var player = gamejs.image.load('images/playerld.png');
+	var player = gamejs.image.load('images/player.png');
 	
     var absX = 0;
 	var absY = 0;
@@ -296,8 +296,11 @@ function main(){
 		gamejs.draw.rect(display, '#3D7030', new gamejs.Rect([0, 0], [WIDTH_PX, HEIGHT_PX]),0)
         b2world.DrawDebugData();
 		
+		display.blit(font.render('FPS: '+ parseInt((1000)/msDuration)), [25, 25]);
+		
+		display.blit(stage, [0,0]);
 		/*
-		display.blit(stage, [PLAYER_SIZE * 2 * SCALE, PLAYER_SIZE * 2 * SCALE]);
+		
 		display.blit(unit, [((circleBall.body.GetPosition().x - circleBall.size) * SCALE), (circleBall.body.GetPosition().y - circleBall.size) * SCALE]);
 		
 		for(var i = 0; i < players.length; i++){
@@ -320,5 +323,5 @@ function logPosition(position){
 	return "x: " + position.x + ", y: " + position.y;
 }
 
-gamejs.preload(["images/cancha5.jpg","images/ball.png","images/playerld.png"]);
+gamejs.preload(["images/cancha.png","images/ball.png","images/player.png"]);
 gamejs.ready(main);
