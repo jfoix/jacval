@@ -235,7 +235,7 @@ function main(){
 	var circleBall = new CircleBall({'size':[1, 6], 'position':[center[0], center[1]]});
 	var stage = gamejs.image.load('images/cancha.png');
 	var unit = gamejs.image.load('images/ball.png');
-	var player = gamejs.image.load('images/player.png');
+	var player = gamejs.image.load('images/player.png'); 
 	
     var absX = 0;
 	var absY = 0;
